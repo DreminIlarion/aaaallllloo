@@ -5,7 +5,7 @@ import { FaUserCircle } from 'react-icons/fa';
 import Form from './Form';
 import ClassifierForm from './MiniClassifier';
 import Chat from './Chat';
-import axios from 'axios';
+
 const Profile = () => {
   const { user, logout, updateUser } = useUser();
   const [activeSection, setActiveSection] = useState(null); // Хранит активный раздел
@@ -145,7 +145,7 @@ const Profile = () => {
           <div className="flex items-center px-6 py-4 border-b border-blue-700">
             <FaUserCircle className="text-3xl text-white mr-3" />
             {user ? (
-              <span className="text-xl font-semibold">{user.email}{user.phoneNumber}</span>
+              <span className="text-xl font-semibold">{user.email}</span>
             ) : (
               <Link to="/login" className="text-white hover:underline">
                 Войти
