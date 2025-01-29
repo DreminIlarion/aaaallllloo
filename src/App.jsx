@@ -7,8 +7,6 @@ import Profile from './components/Profile';
 import Register from './components/Register';
 import Chat from './components/Chat';
 
-import MailCallback from "./components/MailCallback";
-import YandexCallback from "./components/YandexCallback";
 
 
 const App = () => {
@@ -26,8 +24,7 @@ const App = () => {
           <Route path="/chat" element={<Chat />} />
 
           
-          <Route path="/mail.ru/callback" element={<MailCallback />} />
-          <Route path="/yandex/callback" element={<YandexCallback />} />
+          
           
 
         </Routes>
