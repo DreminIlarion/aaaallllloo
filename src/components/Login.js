@@ -1,100 +1,295 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import toast, { Toaster } from 'react-hot-toast';
+import { FaVk, FaMailBulk, FaYandex } from 'react-icons/fa';
+import { useUser } from '../context/UserContext';  // Импортируем контекст
+import axios from 'axios';
 import Cookies from 'js-cookie';
+
 const Login = () => {
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isPhoneLogin, setIsPhoneLogin] = useState(false); // Для переключения между входом по телефону или email
   const navigate = useNavigate();
-  const { updateUser } = useUser(); // Получаем функцию для обновления контекста
+  const { login } = useUser();  // Получаем метод login из контекста
+
+
+    const getTokenFromCookies = (tokenName) => {
+        return Cookies.get(tokenName);
+      };
+
+      const handlePhoneNumberChange = (e) => {
+        let value = e.target.value;
+    
+        // Убираем все символы, кроме цифр и знака "+"
+        value = value.replace(/[^\d+]/g, '');
+    
+        // Если номер начинается с '+7', добавляем его, если это необходимо
+        if (value.startsWith('+7') && value.length > 2) {
+          // Преобразуем номер в формат +7XXXXXXXXXX
+          value = '+7' + value.slice(2).substring(0, 10);
+        }
+    
+        setPhoneNumber(value);
+      };
 
   const handleLogin = async (e) => {
     e.preventDefault();
-
+    setIsLoading(true);
+  
+    const body = isPhoneLogin
+      ? { phone_number: phoneNumber, hash_password: password }
+      : { email: email, hash_password: password };
+  
+    const loginEndpoint = isPhoneLogin
+      ? '/authorization/login/phone/number'
+      : '/authorization/login/email';
+  
     try {
-      const response = await fetch('https://registration-fastapi.onrender.com/authorization/login/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email,
-          hash_password: password,
-        }),
-        credentials: 'include',
-      });
-
+      // Запрос авторизации
+      const response = await fetch(
+        `https://registration-fastapi.onrender.com${loginEndpoint}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            
+          },
+          body: JSON.stringify(body),
+        }
+      );
+  
       if (response.ok) {
         const data = await response.json();
-
-        // Сохраняем токены в куки
+        console.log(data);
+  
+        const { access, refresh } = data;
+  
+        // Сохраняем токены в куки через js-cookie
+        Cookies.set('access', access, {
+          path: '/',
+          secure: true,
+          sameSite: 'None',
+          expires: 1, // 1 день
+        });
+        Cookies.set('refresh', refresh, {
+          path: '/',
+          secure: true,
+          sameSite: 'None',
+          expires: 7, // 7 дней
+        });
+        const accessToken = getTokenFromCookies('access');  // Получение access токена из cookies
+        const refreshToken = getTokenFromCookies('refresh');
+        try {
+            const response = await fetch(
+              `https://personal-account-fastapi.onrender.com/get_token/?access=${accessToken}&refresh=${refreshToken}`,
+              {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'include',  // Это позволяет отправлять куки с запросом
+              }
+            );
         
-
-        Cookies.set('access', data.access, { secure: false, sameSite: 'None' });
-        Cookies.set('refresh', data.refresh, { secure: false, sameSite: 'None' });
-
-        console.log('Login successful');
-        console.log('Access Token:', data.access);
-        console.log('Refresh Token:', data.refresh);
-        
-        // Проверяем куки
-        console.log('Cookies:', document.cookie);
-
-        // Обновляем данные пользователя в контексте
-        updateUser({ email: data.email, name: data.name });
-
-        navigate('/profile'); // Перенаправляем на страницу профиля
+            if (response.ok) {
+              const data = await response.json();
+              console.log('Ответ с сервера:', data);
+              // Обработка ответа от сервера
+            } else {
+              console.log('Ошибка HTTP:', response.status);
+            }
+          } catch (error) {
+            console.error('Ошибка при отправке GET запроса:', error);
+          }
+        // Авторизуем пользователя через UserContext
+        const userData = { email: email, hash_password: password }; // Пример данных пользователя
+        login(userData, access, refresh); // Используем метод login из контекста
+  
+        if (Cookies.get()) {
+          console.log('Куки успешно добавлены.');
+          console.log(userData); // Обработка данных о пользователе
+  
+          toast.success('Вход выполнен успешно!');
+          setTimeout(() => navigate('/profile'), 1500);
+        } else {
+          toast.error('Ошибка при добавлении куки. Попробуйте снова.');
+        }
       } else {
-        console.error('Login failed:', response.status);
+        const errorData = await response.json();
+        toast.error(
+          errorData.message || 'Ошибка входа. Попробуйте снова.'
+        );
       }
     } catch (error) {
-      console.error('Error during login:', error);
+      console.error('Ошибка при авторизации:', error);
+      toast.error('Ошибка сети. Проверьте соединение.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+
+  const handleOAuthRedirect = async (provider) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        `https://registration-fastapi.onrender.com/${provider}/link`,
+        { method: 'GET' }
+      );
+
+      const textResponse = await response.text();
+
+      if (response.ok && textResponse) {
+        const cleanLink = textResponse.replace(/^"|"$/g, '');
+        window.location.href = cleanLink;
+      } else {
+        toast.error('Ошибка получения ссылки.');
+      }
+    } catch (error) {
+      console.error('Ошибка при получении ссылки:', error);
+      toast.error('Ошибка сети. Проверьте соединение.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSocialLogin = async (provider, code) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        `https://registration-fastapi.onrender.com/${provider}/get/token?code=${code}`,
+        { method: 'GET' }
+      );
+
+      const { access, refresh } = await response.json();
+      
+
+      toast.success(`Вход через ${provider} выполнен успешно!`);
+      setTimeout(() => navigate('/profile'), 1500);
+    } catch (error) {
+      console.error('Ошибка при авторизации через соцсеть:', error);
+      toast.error('Ошибка при авторизации. Попробуйте снова.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex justify-center items-center bg-gray-100">
-      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h2 className="text-2xl font-bold text-center mb-6">Вход</h2>
+    <div className="min-h-screen flex justify-center items-center bg-gradient-to-r from-blue-500 to-purple-600">
+      <Toaster position="top-right" />
+      <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md">
+        <h2 className="text-3xl font-bold text-center mb-8 text-gray-800">Добро пожаловать</h2>
         <form onSubmit={handleLogin}>
-          <div className="mb-4">
-            <label htmlFor="email" className="block text-sm font-semibold mb-2">Email</label>
-            <input
-              id="email"
-              type="email"
-              className="w-full p-3 border border-gray-300 rounded-md"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+          <div className="flex justify-center mb-6">
+            <button
+              type="button"
+              className={`px-6 py-3 font-semibold rounded-l-lg ${!isPhoneLogin ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-800'} text-lg`}
+              onClick={() => setIsPhoneLogin(false)}
+            >
+              Вход через Email
+            </button>
+            <button
+              type="button"
+              className={`px-6 py-3 font-semibold rounded-r-lg ${isPhoneLogin ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-800'} text-lg`}
+              onClick={() => setIsPhoneLogin(true)}
+            >
+              Вход через Телефон
+            </button>
           </div>
-          <div className="mb-6">
-            <label htmlFor="password" className="block text-sm font-semibold mb-2">Пароль</label>
+
+          {!isPhoneLogin ? (
+            <div className="mb-6">
+              <label htmlFor="email" className="block text-sm font-semibold mb-2 text-gray-700">
+                Электронная почта
+              </label>
+              <input
+                id="email"
+                type="email"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+          ) : (
+            <div className="mb-6">
+              <label htmlFor="phone_number" className="block text-sm font-semibold mb-2 text-gray-700">
+                Номер телефона
+              </label>
+              <input
+                id="phone_number"
+                type="tel"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                value={phoneNumber}
+                onChange={(e) => {setPhoneNumber(e.target.value);handlePhoneNumberChange(e)}}
+                required
+              />
+            </div>
+          )}
+
+          <div className="mb-8">
+            <label htmlFor="password" className="block text-sm font-semibold mb-2 text-gray-700">
+              Пароль
+            </label>
             <input
               id="password"
               type="password"
-              className="w-full p-3 border border-gray-300 rounded-md"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
+
           <button
             type="submit"
-            className="w-full py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition"
+            className={`w-full py-3 text-white font-bold rounded-lg transition ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+            disabled={isLoading}
           >
-            Войти
+            {isLoading ? 'Загрузка...' : 'Войти'}
           </button>
         </form>
-        <p className="mt-4 text-center">
-          Нет аккаунта?{' '}
-          <span
-            role="link"
-            tabIndex={0}
-            onClick={() => navigate('/register')}
-            className="cursor-pointer underline text-blue-600"
-          >
-            Зарегистрируйтесь
-          </span>
-        </p>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm font-medium mb-4 text-gray-700">Или войдите через:</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <button
+              type="button"
+              className="flex items-center justify-center p-3 border border-gray-300 rounded-lg"
+              onClick={() => handleOAuthRedirect('vk')}
+            >
+              <FaVk className="text-blue-600 text-2xl" />
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center p-3 border border-gray-300 rounded-lg"
+              onClick={() => handleOAuthRedirect('mail')}
+            >
+              <FaMailBulk className="text-blue-600 text-2xl" />
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center p-3 border border-gray-300 rounded-lg"
+              onClick={() => handleOAuthRedirect('yandex')}
+            >
+              <FaYandex className="text-blue-600 text-2xl" />
+            </button>
+            <p className="mt-6 text-center text-sm text-gray-700">
+                    Нет аккаунта?{' '}
+                    <span
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => navigate('/registration')}
+                        className="cursor-pointer underline text-blue-600 font-semibold"
+                    >
+                        Зарегистрируйтесь
+                    </span>
+                </p>
+          </div>
+        </div>
       </div>
     </div>
   );

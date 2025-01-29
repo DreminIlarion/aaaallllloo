@@ -84,10 +84,12 @@ const ClassifierForm = () => {
             </select>
           </label>
 
-          <label className="block text-sm font-semibold">Средний балл (GPA):
+          <label className="block text-sm font-semibold">Средний балл аттестата:
             <input
               type="number"
               step="0.01"
+              min='2.0'
+              max='5.0'
               value={formData.gpa}
               name="gpa"
               onChange={handleChange}
@@ -96,7 +98,7 @@ const ClassifierForm = () => {
             />
           </label>
 
-          <label className="block text-sm font-semibold">Общее количество баллов:
+          <label className="block text-sm font-semibold">Общее количество баллов (ЕГЭ):
             <input
               type="range"
               min="0"
@@ -178,7 +180,7 @@ const ClassifierForm = () => {
       {/* Результат предсказания */}
       {prediction !== null && (
         <div className="mt-6 p-6 bg-gray-100 rounded-3xl shadow-md max-w-lg mx-auto">
-          <h2 className="text-xl font-semibold mb-4">Result predict</h2>
+          <h2 className="text-xl font-semibold mb-4">Результат</h2>
           <p className="text-lg">
             Шанс на поступление: {' '}
             <span
@@ -195,11 +197,11 @@ const ClassifierForm = () => {
               }
             >
               {(() => {
-                if (prediction <= 0.25) return 'Очень низкий';
-                if (prediction > 0.25 && prediction <= 0.4) return 'Низкий';
-                if (prediction > 0.4 && prediction <= 0.6) return 'Средний';
-                if (prediction > 0.6 && prediction <= 0.75) return 'Повышенный';
-                return 'Высокий';
+                if (prediction <= 0.25) return 'Очень низкий (менее 25%)';
+                if (prediction > 0.25 && prediction <= 0.4) return 'Низкий (менее 40%)';
+                if (prediction > 0.4 && prediction <= 0.6) return 'Средний (более 50%)';
+                if (prediction > 0.6 && prediction <= 0.75) return 'Повышенный (более 60%)';
+                return 'Высокий (более 75%)';
               })()}
             </span>
           </p>

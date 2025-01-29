@@ -1,8 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
+
+  // Загружаем сообщения из localStorage при монтировании компонента
+  useEffect(() => {
+    const savedMessages = JSON.parse(localStorage.getItem('chatMessages'));
+    if (savedMessages) {
+      setMessages(savedMessages);
+    }
+  }, []);
+
+  // Сохраняем сообщения в localStorage при изменении
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem('chatMessages', JSON.stringify(messages));
+    }
+  }, [messages]);
 
   // Функция для отправки сообщения
   const sendMessage = async () => {
@@ -13,12 +28,12 @@ const Chat = () => {
     setInputMessage('');
 
     try {
-      const response = await fetch('https://personal-account-fastapi.onrender.com/answer/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: inputMessage }),
+      const encodedMessage = encodeURIComponent(inputMessage); // Кодируем сообщение для URL
+
+      // Отправляем GET-запрос с параметром message
+      const response = await fetch(`https://personal-account-fastapi.onrender.com/answer/?message=${encodedMessage}`, {
+        method: 'GET',
+        credentials: 'include', // Если необходимо, можно оставить credentials
       });
 
       if (!response.ok) {
@@ -26,12 +41,12 @@ const Chat = () => {
       }
 
       const data = await response.json();
-      setMessages([...newMessages, { text: data.reply, sender: 'bot' }]);
+      setMessages([...newMessages, { text: data.answer, sender: 'bot' }]); // Используем ключ 'answer' из ответа
     } catch (error) {
       console.error('Error:', error);
       setMessages([
         ...newMessages,
-        { text: 'Произошла ошибка при получении ответа от сервера.', sender: 'bot' },
+        { text: 'Чтобы начать пользоваться чат-ботом, войдите в аккаунт', sender: 'bot' },
       ]);
     }
   };
@@ -50,9 +65,7 @@ const Chat = () => {
         {messages.map((msg, index) => (
           <div
             key={index}
-            className={`flex ${
-              msg.sender === 'user' ? 'justify-end' : 'justify-start'
-            }`}
+            className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
               className={`max-w-[70%] p-3 rounded-xl text-sm shadow ${

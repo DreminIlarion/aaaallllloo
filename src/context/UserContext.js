@@ -18,7 +18,7 @@ export const UserProvider = ({ children }) => {
 
   // Метод для обновления данных пользователя
   const updateUser = (updatedUser) => setUser(updatedUser);
-
+ 
   return (
     <UserContext.Provider value={{ user, login, logout, updateUser }}>
       {children}
